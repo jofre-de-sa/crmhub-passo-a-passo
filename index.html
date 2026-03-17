@@ -473,10 +473,13 @@
       if (error) throw error;
 
       if (data && data.senha === senhaHash) {
-        /* ✅ Credenciais OK — verifica tipo */
+        /* ✅ Credenciais OK — salva sessão e verifica tipo */
         setField('rowEmail','msgEmail','success','');
         setField('rowSenha','msgSenha','success','');
         const tipo = (data.tipo || '').toLowerCase().trim();
+
+        /* Salva dados do usuário para usar nas páginas internas */
+        localStorage.setItem('crm_user', JSON.stringify({ id: data.id, nome: data.nome, tipo }));
 
         if (tipo === 'administrador') {
           showToast(`✓ Bem-vindo, ${data.nome}! [Administrador]`, 'success');
@@ -488,6 +491,7 @@
 
         } else {
           showToast(`✓ Bem-vindo, ${data.nome}! (perfil não definido)`, 'success');
+
         }
 
       } else {
