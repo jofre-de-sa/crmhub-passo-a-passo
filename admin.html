@@ -461,11 +461,10 @@
     showToast('✓ Projecto adicionado!', 'success');
   });
 
-  /* ── Modal Minha Conta ── */
-  const modalAcc = document.getElementById('modalAccount');
-  document.getElementById('navMyAccount').addEventListener('click', () => modalAcc.classList.add('active'));
-  document.getElementById('modalAccClose').addEventListener('click', () => modalAcc.classList.remove('active'));
-  modalAcc.addEventListener('click', e => { if(e.target===modalAcc) modalAcc.classList.remove('active'); });
+  /* ── My Account → página própria ── */
+  document.getElementById('navMyAccount').addEventListener('click', () => {
+    window.location.href = 'minhaconta.html';
+  });
 
   /* ── Logout ── */
   function doLogout() {
@@ -473,7 +472,6 @@
     window.location.href = 'index.html';
   }
   document.getElementById('btnLogout').addEventListener('click', doLogout);
-  document.getElementById('btnLogoutConfirm').addEventListener('click', doLogout);
 </script>
 </body>
 </html>
