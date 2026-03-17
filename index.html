@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>CRM HUB — Entrar</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet"/>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -355,12 +356,19 @@
 </div>
 
 <script>
-
-
-
+  /* ── Supabase ── */
   const SUPABASE_URL = 'https://dqudfksdvyidimjjxpgq.supabase.co';
-  const SUPABASE_KEY ='sb_publishable_RhMLVVFehGzGn5HUYuzOLA_Zgsin-5U';
-  /* Helpers */
+  const SUPABASE_KEY = 'sb_publishable_RhMLVVFehGzGn5HUYuzOLA_Zgsin-5U';
+  const { createClient } = supabase;
+  const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  /* ── Hash SHA-256 (senha nunca salva em texto puro) ── */
+  async function sha256(text) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+  }
+
+  /* ── Helpers UI ── */
   function setField(rowId, msgId, state, msg) {
     const row = document.getElementById(rowId);
     const el  = document.getElementById(msgId);
@@ -376,14 +384,20 @@
     t.textContent = msg;
     t.className = 'show toast-'+type;
     clearTimeout(t._t);
-    t._t = setTimeout(()=>{ t.className=''; }, 3200);
+    t._t = setTimeout(()=>{ t.className=''; }, 3400);
+  }
+
+  function setBtnLoading(btnId, lblId, spnId, loading) {
+    document.getElementById(btnId).disabled = loading;
+    document.getElementById(lblId).style.display = loading ? 'none' : '';
+    document.getElementById(spnId).style.display  = loading ? 'block' : 'none';
   }
 
   function isEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
 
-  /* Toggle senha */
-  const togglePw  = document.getElementById('togglePw');
-  const senhaEl   = document.getElementById('senha');
+  /* ── Toggle senha ── */
+  const togglePw = document.getElementById('togglePw');
+  const senhaEl  = document.getElementById('senha');
   togglePw.addEventListener('click', () => {
     const show = senhaEl.type==='text';
     senhaEl.type = show ? 'password' : 'text';
@@ -392,7 +406,7 @@
       : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
   });
 
-  /* Validação live — Login */
+  /* ── Validação live — Login ── */
   const emailEl = document.getElementById('email');
   emailEl.addEventListener('blur', ()=>{
     if (!emailEl.value.trim()) setField('rowEmail','msgEmail','error','Campo obrigatório.');
@@ -407,52 +421,59 @@
     else setField('rowSenha','msgSenha','success','');
   });
   senhaEl.addEventListener('input', ()=>{ if(senhaEl.value.length>=4) setField('rowSenha','msgSenha','success',''); });
-
-  /* Enter key */
   [emailEl, senhaEl].forEach(el => el.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('btnEntrar').click(); }));
 
-  /* Login submit */
-  document.getElementById('btnEntrar').addEventListener('click', ()=>{
-    const email = emailEl.value.trim();
-    const senha = senhaEl.value;
+  /* ── LOGIN — consulta tabela `login` no Supabase ── */
+  document.getElementById('btnEntrar').addEventListener('click', async () => {
+    const nomeVal  = emailEl.value.trim();
+    const senhaVal = senhaEl.value;
     let ok = true;
-    if (!email) { setField('rowEmail','msgEmail','error','Informe seu e-mail ou usuário.'); ok=false; }
-    if (!senha) { setField('rowSenha','msgSenha','error','Informe sua senha.'); ok=false; }
-    else if (senha.length<4) { setField('rowSenha','msgSenha','error','Senha muito curta.'); ok=false; }
+    if (!nomeVal)  { setField('rowEmail','msgEmail','error','Informe seu usuário.'); ok=false; }
+    if (!senhaVal) { setField('rowSenha','msgSenha','error','Informe sua senha.'); ok=false; }
+    else if (senhaVal.length<4) { setField('rowSenha','msgSenha','error','Senha muito curta.'); ok=false; }
     if (!ok) return;
 
-    const btn = document.getElementById('btnEntrar');
-    const lbl = document.getElementById('btnEntrarLabel');
-    const spn = document.getElementById('spinnerEntrar');
-    btn.disabled=true; lbl.style.display='none'; spn.style.display='block';
+    setBtnLoading('btnEntrar','btnEntrarLabel','spinnerEntrar', true);
+    try {
+      const senhaHash = await sha256(senhaVal);
+      const { data, error } = await db
+        .from('login')
+        .select('id, nome')
+        .eq('nome', nomeVal)
+        .eq('senha', senhaHash)
+        .maybeSingle();
 
-    setTimeout(()=>{
-      btn.disabled=false; lbl.style.display=''; spn.style.display='none';
-      /* Credenciais demo: admin / 1234 */
-      if ((email==='admin'||email==='admin@crmhub.com') && senha==='1234') {
+      if (error) throw error;
+
+      if (data) {
         setField('rowEmail','msgEmail','success','');
         setField('rowSenha','msgSenha','success','');
-        showToast('✓ Bem-vindo ao CRM HUB!','success');
+        showToast(`✓ Bem-vindo, ${data.nome}!`, 'success');
+        // Redirecionar após login: window.location.href = 'dashboard.html';
       } else {
         setField('rowSenha','msgSenha','error','Usuário ou senha incorretos.');
         showToast('Credenciais inválidas.','error');
       }
-    }, 1600);
+    } catch(e) {
+      console.error(e);
+      showToast('Erro de conexão. Verifique o console.','error');
+    }
+    setBtnLoading('btnEntrar','btnEntrarLabel','spinnerEntrar', false);
   });
 
-  /* Esqueceu a senha */
+  /* ── Esqueceu a senha ── */
   document.getElementById('btnForgot').addEventListener('click', ()=>{
-    if (!emailEl.value.trim()) { setField('rowEmail','msgEmail','error','Informe o e-mail para recuperação.'); return; }
-    showToast('Link de recuperação enviado para o seu e-mail!','success');
+    if (!emailEl.value.trim()) { setField('rowEmail','msgEmail','error','Informe o usuário para recuperação.'); return; }
+    showToast('Link de recuperação enviado!','success');
   });
 
-  /* Modal Criar Conta */
+  /* ── Modal Criar Conta ── */
   const overlay = document.getElementById('modalOverlay');
-  document.getElementById('btnCriar').addEventListener('click', ()=> overlay.classList.add('active'));
+  document.getElementById('btnCriar').addEventListener('click',  ()=> overlay.classList.add('active'));
   document.getElementById('modalClose').addEventListener('click', ()=> overlay.classList.remove('active'));
   overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.classList.remove('active'); });
 
-  /* Validação live — Registro */
+  /* ── Validação live — Registro ── */
   const nomeEl     = document.getElementById('nome');
   const emailRegEl = document.getElementById('emailReg');
   const senhaRegEl = document.getElementById('senhaReg');
@@ -475,8 +496,8 @@
   });
   senhaRegEl.addEventListener('input', ()=>{ if(senhaRegEl.value.length>=6) setField('rowSenhaReg','msgSenhaReg','success','✓ Senha válida.'); });
 
-  /* Registro submit */
-  document.getElementById('btnRegistrar').addEventListener('click', ()=>{
+  /* ── CRIAR CONTA — insere na tabela `login` ── */
+  document.getElementById('btnRegistrar').addEventListener('click', async () => {
     const nome  = nomeEl.value.trim();
     const email = emailRegEl.value.trim();
     const senha = senhaRegEl.value;
@@ -489,11 +510,31 @@
     else if (senha.length<6) { setField('rowSenhaReg','msgSenhaReg','error','Mínimo 6 caracteres.'); ok=false; }
     if (!ok) return;
 
-    overlay.classList.remove('active');
-    showToast('✓ Conta criada com sucesso!','success');
-    nomeEl.value=''; emailRegEl.value=''; senhaRegEl.value='';
-    [['rowNome','msgNome'],['rowEmailReg','msgEmailReg'],['rowSenhaReg','msgSenhaReg']]
-      .forEach(([r,m])=> setField(r,m,'',''));
+    const btnReg = document.getElementById('btnRegistrar');
+    btnReg.disabled = true;
+    try {
+      /* Verifica se usuário já existe */
+      const { data: existe } = await db.from('login').select('id').eq('nome', nome).maybeSingle();
+      if (existe) {
+        setField('rowNome','msgNome','error','Este usuário já está cadastrado.');
+        btnReg.disabled = false;
+        return;
+      }
+
+      const senhaHash = await sha256(senha);
+      const { error } = await db.from('login').insert([{ nome, senha: senhaHash }]);
+      if (error) throw error;
+
+      overlay.classList.remove('active');
+      showToast('✓ Conta criada com sucesso!','success');
+      nomeEl.value=''; emailRegEl.value=''; senhaRegEl.value='';
+      [['rowNome','msgNome'],['rowEmailReg','msgEmailReg'],['rowSenhaReg','msgSenhaReg']]
+        .forEach(([r,m])=> setField(r,m,'',''));
+    } catch(e) {
+      console.error(e);
+      showToast('Erro ao criar conta. Tente novamente.','error');
+    }
+    btnReg.disabled = false;
   });
 </script>
 </body>
