@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CRM HUB — Minha Conta</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0b1428;
+      --bg-mid:    #0f1e3a;
+      --bg-field:  #1a3a72;
+      --accent:    #e02020;
+      --purple:    #6c3fc5;
+      --purple-lt: #7c4fd5;
+      --white:     #ffffff;
+      --text:      #ccd6f0;
+      --text-dim:  #6a7fa8;
+      --border:    rgba(255,255,255,0.08);
+      --success:   #28e07a;
+      --error:     #ff4d4d;
+      --nav-h:     70px;
+      --header-h:  116px;
+    }
+
+    html, body { height: 100%; font-family: 'Barlow', sans-serif; background: var(--bg); color: var(--white); }
+
+    /* ══ HEADER ══ */
+    header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+      height: var(--header-h);
+      background: var(--bg-mid);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px 0 20px;
+    }
+    .logo-area { display: flex; align-items: center; gap: 14px; }
+    .logo-box {
+      border: 2.5px solid var(--accent);
+      padding: 6px 10px; position: relative; flex-shrink: 0;
+    }
+    .logo-box::before, .logo-box::after {
+      content: ''; position: absolute;
+      width: 7px; height: 7px; border-color: #c41212; border-style: solid;
+    }
+    .logo-box::before { top: -3px; left: -3px; border-width: 2.5px 0 0 2.5px; }
+    .logo-box::after  { bottom: -3px; right: -3px; border-width: 0 2.5px 2.5px 0; }
+    .logo-text {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 800; font-size: 1.4rem; line-height: 1;
+      color: var(--accent); letter-spacing: .04em;
+    }
+    .logo-sub { font-size: .68rem; font-weight: 300; color: var(--text); line-height: 1.5; }
+
+    .user-panel {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 5px; height: 100%; padding: 10px 0;
+    }
+    .user-avatar {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #4a3a9a, #2a1a6a);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 0 3px rgba(108,63,197,.4); flex-shrink: 0;
+    }
+    .user-avatar svg { width: 24px; height: 24px; }
+    .user-name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: .95rem; font-weight: 700;
+      letter-spacing: .08em; color: var(--white);
+      text-align: center; line-height: 1;
+    }
+    .user-badges { display: flex; gap: 6px; }
+    .badge {
+      width: 26px; height: 26px; border-radius: 50%;
+      border: 2px solid var(--purple);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: background .2s;
+    }
+    .badge:hover { background: rgba(108,63,197,.3); }
+    .badge svg { width: 12px; height: 12px; }
+    .user-label {
+      font-size: .65rem; color: var(--text-dim);
+      letter-spacing: .06em; text-transform: uppercase; line-height: 1;
+    }
+
+    /* ══ MAIN ══ */
+    main {
+      padding-top: calc(var(--header-h) + 36px);
+      padding-bottom: calc(var(--nav-h) + 32px);
+      padding-left: 28px; padding-right: 28px;
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center;
+    }
+
+    .page-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 2rem; font-weight: 700; color: var(--white);
+      width: 100%; max-width: 420px; margin-bottom: 28px;
+    }
+
+    .profile-card {
+      width: 100%; max-width: 420px;
+      display: flex; flex-direction: column; align-items: center;
+    }
+
+    /* Loading state */
+    .loading-ring {
+      display: none;
+      width: 36px; height: 36px; margin: 20px auto;
+      border: 3px solid rgba(255,255,255,.1);
+      border-top-color: var(--purple);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .profile-avatar {
+      width: 80px; height: 80px; border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #4a3a9a, #2a1a6a);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 0 4px rgba(108,63,197,.35);
+      margin-bottom: 14px;
+    }
+    .profile-avatar svg { width: 40px; height: 40px; }
+
+    .profile-name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.5rem; font-weight: 700;
+      color: var(--white); letter-spacing: .06em; margin-bottom: 4px;
+    }
+    .profile-email { font-size: .82rem; color: var(--text-dim); margin-bottom: 28px; }
+
+    /* Fields */
+    .fields { width: 100%; display: flex; flex-direction: column; gap: 12px; }
+
+    .field-group {
+      background: var(--bg-field);
+      border-radius: 12px; padding: 14px 18px;
+      transition: background .2s, border .2s;
+      border: 1.5px solid transparent;
+    }
+    .field-group.editing { border-color: rgba(108,63,197,.5); background: #1e4490; }
+    .field-label {
+      font-size: .65rem; font-weight: 600;
+      color: var(--text-dim); letter-spacing: .1em;
+      text-transform: uppercase; margin-bottom: 4px;
+    }
+    .field-value { font-size: .95rem; font-weight: 500; color: var(--white); }
+    .field-input {
+      width: 100%; background: transparent; border: none;
+      outline: none; color: var(--white);
+      font-family: 'Barlow', sans-serif;
+      font-size: .95rem; font-weight: 500;
+      display: none;
+    }
+    .field-input::placeholder { color: rgba(255,255,255,.3); }
+
+    /* Buttons */
+    .btn-editar {
+      width: 100%; padding: 15px;
+      background: var(--bg-field);
+      border: none; border-radius: 12px;
+      color: var(--white);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1rem; font-weight: 700; letter-spacing: .16em;
+      cursor: pointer; margin-top: 12px;
+      transition: background .2s, transform .15s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-editar:hover { background: #1e4490; }
+    .btn-editar:active { transform: scale(.98); }
+    .btn-editar:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .btn-editar.mode-save { background: #1a4a2a; }
+    .btn-editar.mode-save:hover { background: #1e5a32; }
+
+    .btn-save-spinner {
+      display: none; width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+
+    .divider {
+      width: 100%; max-width: 420px;
+      height: 1px; background: var(--border); margin: 20px 0;
+    }
+
+    .btn-logout {
+      width: 100%; max-width: 420px; padding: 13px;
+      background: transparent;
+      border: 1px solid rgba(224,32,32,.35);
+      border-radius: 12px; color: #e02020;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: .95rem; font-weight: 600; letter-spacing: .14em;
+      cursor: pointer; transition: background .2s;
+    }
+    .btn-logout:hover { background: rgba(224,32,32,.1); }
+
+    /* ══ BOTTOM NAV ══ */
+    nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      height: var(--nav-h);
+      background: var(--bg-mid);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-around;
+      z-index: 50;
+    }
+    .nav-item {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      cursor: pointer; padding: 8px 16px;
+      color: var(--text-dim); transition: color .2s;
+      background: none; border: none;
+    }
+    .nav-item:hover, .nav-item.active { color: var(--white); }
+    .nav-item svg { width: 22px; height: 22px; }
+    .nav-item span { font-size: .7rem; letter-spacing: .04em; }
+
+    /* Toast */
+    #toast {
+      position: fixed; top: calc(var(--header-h) + 12px); left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      background: #152a55; border: 1px solid rgba(255,255,255,.12);
+      color: var(--white); font-size: .85rem;
+      padding: 10px 22px; border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.4);
+      transition: transform .35s cubic-bezier(.22,1,.36,1), opacity .35s;
+      opacity: 0; white-space: nowrap; z-index: 200;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    #toast.toast-success { border-color: var(--success); color: var(--success); }
+    #toast.toast-error   { border-color: var(--error);   color: var(--error); }
+
+    @media (max-width: 480px) {
+      main { padding-left: 16px; padding-right: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo-area">
+    <div class="logo-box">
+      <div class="logo-text">CRM<br>HUB</div>
+    </div>
+    <div class="logo-sub">Customer Relationship<br>Management Hub<br>By Plotting Engage.</div>
+  </div>
+  <div class="user-panel">
+    <div class="user-avatar">
+      <svg viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="8" r="4" fill="#f0c040"/>
+        <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="#f0c040"/>
+      </svg>
+    </div>
+    <div class="user-name" id="headerName">—</div>
+    <div class="user-badges">
+      <div class="badge" title="Notificações">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+      </div>
+      <div class="badge" title="Mensagens">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+      </div>
+      <div class="badge" title="Sair" id="btnLogoutHeader">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </div>
+    </div>
+    <div class="user-label" id="headerTipo">Administrador</div>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main>
+  <div class="page-title">A Minha Conta</div>
+
+  <div class="profile-card">
+    <div class="loading-ring" id="loadingRing"></div>
+
+    <div id="profileContent" style="width:100%;display:flex;flex-direction:column;align-items:center;">
+      <div class="profile-avatar">
+        <svg viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="8" r="4" fill="#f0c040"/>
+          <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="#f0c040"/>
+        </svg>
+      </div>
+      <div class="profile-name" id="profileName">—</div>
+      <div class="profile-email" id="profileEmail">—</div>
+
+      <div class="fields">
+        <!-- Empresa -->
+        <div class="field-group" id="fgEmpresa">
+          <div class="field-label">Empresa</div>
+          <div class="field-value" id="valEmpresa">—</div>
+          <input class="field-input" id="inpEmpresa" type="text" placeholder="Nome da empresa"/>
+        </div>
+        <!-- NIF -->
+        <div class="field-group" id="fgNif">
+          <div class="field-label">NIF</div>
+          <div class="field-value" id="valNif">—</div>
+          <input class="field-input" id="inpNif" type="text" placeholder="Número de identificação fiscal"/>
+        </div>
+        <!-- País -->
+        <div class="field-group" id="fgPais">
+          <div class="field-label">País</div>
+          <div class="field-value" id="valPais">—</div>
+          <input class="field-input" id="inpPais" type="text" placeholder="País"/>
+        </div>
+        <!-- Email -->
+        <div class="field-group" id="fgEmail">
+          <div class="field-label">E-mail</div>
+          <div class="field-value" id="valEmail">—</div>
+          <input class="field-input" id="inpEmail" type="email" placeholder="E-mail de contacto"/>
+        </div>
+      </div>
+
+      <button class="btn-editar" id="btnEditar">
+        <span id="btnEditarLabel">EDITAR PERFIL</span>
+        <div class="btn-save-spinner" id="btnSpinner"></div>
+      </button>
+
+      <div class="divider"></div>
+      <button class="btn-logout" id="btnLogout">SAIR DA CONTA</button>
+    </div>
+  </div>
+</main>
+
+<!-- BOTTOM NAV -->
+<nav>
+  <button class="nav-item" id="navHome">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+      <polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+    <span>Home</span>
+  </button>
+  <button class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+      <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+    </svg>
+    <span>My List</span>
+  </button>
+  <button class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+    <span>Setting</span>
+  </button>
+  <button class="nav-item active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+    </svg>
+    <span>My Account</span>
+  </button>
+</nav>
+
+<div id="toast"></div>
+
+<script>
+  /* ══ Supabase ══ */
+  const SUPABASE_URL = 'https://dqudfksdvyidimjjxpgq.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_RhMLVVFehGzGn5HUYuzOLA_Zgsin-5U';
+  const { createClient } = supabase;
+  const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  /* ══ Sessão ══ */
+  const session = JSON.parse(localStorage.getItem('crm_user') || 'null');
+  if (!session) { window.location.href = 'index.html'; }
+
+  /* Preenche header */
+  document.getElementById('headerName').textContent = session.nome;
+  document.getElementById('headerTipo').textContent =
+    session.tipo.charAt(0).toUpperCase() + session.tipo.slice(1);
+
+  /* Preenche nome no perfil */
+  document.getElementById('profileName').textContent =
+    session.nome + (session.tipo === 'administrador' ? ' Admin' : '');
+
+  /* ══ Toast ══ */
+  function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show toast-' + (type || 'success');
+    clearTimeout(t._t);
+    t._t = setTimeout(function(){ t.className = ''; }, 3400);
+  }
+
+  /* ══ Render campos com dados do banco ══ */
+  function renderPerfil(p) {
+    const emp   = p && p.empresa ? p.empresa : '—';
+    const nif   = p && p.nif     ? p.nif     : '—';
+    const pais  = p && p.pais    ? p.pais    : '—';
+    const email = p && p.email   ? p.email   : '—';
+
+    document.getElementById('valEmpresa').textContent = emp;
+    document.getElementById('valNif').textContent     = nif;
+    document.getElementById('valPais').textContent    = pais;
+    document.getElementById('valEmail').textContent   = email;
+    document.getElementById('profileEmail').textContent = email !== '—' ? email : '';
+
+    document.getElementById('inpEmpresa').value = emp !== '—' ? emp : '';
+    document.getElementById('inpNif').value     = nif !== '—' ? nif : '';
+    document.getElementById('inpPais').value    = pais !== '—' ? pais : '';
+    document.getElementById('inpEmail').value   = email !== '—' ? email : '';
+  }
+
+  /* ══ Carregar perfil do banco ══ */
+  async function carregarPerfil() {
+    document.getElementById('loadingRing').style.display = 'block';
+    document.getElementById('profileContent').style.opacity = '0.4';
+    try {
+      const { data, error } = await db
+        .from('perfil')
+        .select('*')
+        .eq('login_id', session.id)
+        .maybeSingle();
+      if (error) throw error;
+      renderPerfil(data);
+    } catch(e) {
+      console.error(e);
+      showToast('Erro ao carregar perfil.', 'error');
+    }
+    document.getElementById('loadingRing').style.display = 'none';
+    document.getElementById('profileContent').style.opacity = '1';
+  }
+  carregarPerfil();
+
+  /* ══ Modo edição ══ */
+  let editMode = false;
+  const btnEditar = document.getElementById('btnEditar');
+  const campos = ['Empresa','Nif','Pais','Email'];
+
+  function setEditMode(on) {
+    editMode = on;
+    campos.forEach(function(k) {
+      const fg  = document.getElementById('fg' + k);
+      const val = document.getElementById('val' + k);
+      const inp = document.getElementById('inp' + k);
+      fg.classList.toggle('editing', on);
+      val.style.display = on ? 'none'  : 'block';
+      inp.style.display = on ? 'block' : 'none';
+    });
+    document.getElementById('btnEditarLabel').textContent =
+      on ? 'GUARDAR ALTERAÇÕES' : 'EDITAR PERFIL';
+    btnEditar.classList.toggle('mode-save', on);
+    if (on) document.getElementById('inpEmpresa').focus();
+  }
+
+  /* ══ Guardar no banco ══ */
+  async function guardarPerfil() {
+    const empresa = document.getElementById('inpEmpresa').value.trim();
+    const nif     = document.getElementById('inpNif').value.trim();
+    const pais    = document.getElementById('inpPais').value.trim();
+    const email   = document.getElementById('inpEmail').value.trim();
+
+    /* Loading no botão */
+    btnEditar.disabled = true;
+    document.getElementById('btnEditarLabel').style.display = 'none';
+    document.getElementById('btnSpinner').style.display = 'block';
+
+    try {
+      /* upsert: cria se não existir, actualiza se já existir */
+      const { error } = await db
+        .from('perfil')
+        .upsert({
+          login_id: session.id,
+          empresa:  empresa || null,
+          nif:      nif     || null,
+          pais:     pais    || null,
+          email:    email   || null
+        }, { onConflict: 'login_id' });
+
+      if (error) throw error;
+
+      /* Actualiza visualização */
+      renderPerfil({ empresa, nif, pais, email });
+      setEditMode(false);
+      showToast('✓ Perfil guardado com sucesso!', 'success');
+
+      /* Actualiza email exibido no perfil */
+      if (email) document.getElementById('profileEmail').textContent = email;
+
+    } catch(e) {
+      console.error(e);
+      showToast('Erro ao guardar. Tente novamente.', 'error');
+      document.getElementById('btnEditarLabel').textContent = 'GUARDAR ALTERAÇÕES';
+    }
+
+    btnEditar.disabled = false;
+    document.getElementById('btnEditarLabel').style.display = 'inline';
+    document.getElementById('btnSpinner').style.display = 'none';
+  }
+
+  btnEditar.addEventListener('click', function() {
+    if (!editMode) {
+      setEditMode(true);
+    } else {
+      guardarPerfil();
+    }
+  });
+
+  /* ══ Navegação ══ */
+  document.getElementById('navHome').addEventListener('click', function() {
+    window.location.href = 'admin.html';
+  });
+  document.querySelectorAll('.nav-item').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.nav-item').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+    });
+  });
+
+  /* ══ Logout ══ */
+  function doLogout() { localStorage.removeItem('crm_user'); window.location.href = 'index.html'; }
+  document.getElementById('btnLogout').addEventListener('click', doLogout);
+  document.getElementById('btnLogoutHeader').addEventListener('click', doLogout);
+</script>
+</body>
+</html>
