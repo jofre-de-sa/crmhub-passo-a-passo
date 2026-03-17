@@ -137,6 +137,15 @@
     }
     .input-row input::placeholder { color: var(--text-dim); }
 
+    .input-row select {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--white); font-family: 'Barlow', sans-serif;
+      font-size: .95rem; font-weight: 400; letter-spacing: .04em; cursor: pointer;
+      appearance: none; -webkit-appearance: none;
+    }
+    .input-row select option { background: #0f1e3a; color: var(--white); }
+    .input-row select:invalid, .input-row select option[value=""] { color: var(--text-dim); }
+
     .toggle-pw {
       background: none; border: none; cursor: pointer;
       color: var(--text-dim); padding: 0; line-height: 1; transition: color .2s;
@@ -349,6 +358,23 @@
         </div>
         <span class="field-msg" id="msgSenhaReg"></span>
       </div>
+      <div class="field">
+        <div class="input-row" id="rowTipo">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7a90b8" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <select id="tipo" required>
+            <option value="" disabled selected>Tipo de usuário</option>
+            <option value="administrador">Administrador</option>
+            <option value="colaborador">Colaborador</option>
+          </select>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7a90b8" stroke-width="2" style="flex-shrink:0;pointer-events:none">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </div>
+        <span class="field-msg" id="msgTipo"></span>
+      </div>
       <div style="margin-top:8px"></div>
       <button class="btn btn-primary" id="btnRegistrar">REGISTRAR</button>
     </div>
@@ -423,7 +449,7 @@
   senhaEl.addEventListener('input', ()=>{ if(senhaEl.value.length>=4) setField('rowSenha','msgSenha','success',''); });
   [emailEl, senhaEl].forEach(el => el.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('btnEntrar').click(); }));
 
-  /* ── LOGIN — consulta tabela `login` no Supabase ── */
+  /* ── LOGIN — verifica credenciais + tipo no Supabase ── */
   document.getElementById('btnEntrar').addEventListener('click', async () => {
     const nomeVal  = emailEl.value.trim();
     const senhaVal = senhaEl.value;
@@ -436,27 +462,41 @@
     setBtnLoading('btnEntrar','btnEntrarLabel','spinnerEntrar', true);
     try {
       const senhaHash = await sha256(senhaVal);
+
+      /* ilike = case-insensitive (JofreSá = jofresa = JOFRESA) */
       const { data, error } = await db
         .from('login')
-        .select('id, nome')
-        .eq('nome', nomeVal)
-        .eq('senha', senhaHash)
+        .select('id, nome, senha, tipo')
+        .ilike('nome', nomeVal)
         .maybeSingle();
 
       if (error) throw error;
 
-      if (data) {
+      if (data && data.senha === senhaHash) {
+        /* ✅ Credenciais OK — verifica tipo */
         setField('rowEmail','msgEmail','success','');
         setField('rowSenha','msgSenha','success','');
-        showToast(`✓ Bem-vindo, ${data.nome}!`, 'success');
-        // Redirecionar após login: window.location.href = 'dashboard.html';
+        const tipo = (data.tipo || '').toLowerCase().trim();
+
+        if (tipo === 'administrador') {
+          showToast(`✓ Bem-vindo, ${data.nome}! [Administrador]`, 'success');
+          setTimeout(() => window.location.href = 'admin.html', 1500);
+
+        } else if (tipo === 'colaborador') {
+          showToast(`✓ Bem-vindo, ${data.nome}! [Colaborador]`, 'success');
+          setTimeout(() => window.location.href = 'colaborador.html', 1500);
+
+        } else {
+          showToast(`✓ Bem-vindo, ${data.nome}! (perfil não definido)`, 'success');
+        }
+
       } else {
         setField('rowSenha','msgSenha','error','Usuário ou senha incorretos.');
         showToast('Credenciais inválidas.','error');
       }
     } catch(e) {
       console.error(e);
-      showToast('Erro de conexão. Verifique o console.','error');
+      showToast('Erro de conexão. Verifique o console (F12).','error');
     }
     setBtnLoading('btnEntrar','btnEntrarLabel','spinnerEntrar', false);
   });
@@ -477,6 +517,7 @@
   const nomeEl     = document.getElementById('nome');
   const emailRegEl = document.getElementById('emailReg');
   const senhaRegEl = document.getElementById('senhaReg');
+  const tipoEl     = document.getElementById('tipo');
 
   nomeEl.addEventListener('blur', ()=>{
     if (!nomeEl.value.trim()) setField('rowNome','msgNome','error','Informe seu nome.');
@@ -495,12 +536,14 @@
     else setField('rowSenhaReg','msgSenhaReg','success','✓ Senha válida.');
   });
   senhaRegEl.addEventListener('input', ()=>{ if(senhaRegEl.value.length>=6) setField('rowSenhaReg','msgSenhaReg','success','✓ Senha válida.'); });
+  tipoEl.addEventListener('change', ()=>{ if(tipoEl.value) setField('rowTipo','msgTipo','success',''); });
 
-  /* ── CRIAR CONTA — insere na tabela `login` ── */
+  /* ── CRIAR CONTA — insere na tabela `login` com campo tipo ── */
   document.getElementById('btnRegistrar').addEventListener('click', async () => {
     const nome  = nomeEl.value.trim();
     const email = emailRegEl.value.trim();
     const senha = senhaRegEl.value;
+    const tipo  = tipoEl.value;
     let ok = true;
 
     if (!nome)  { setField('rowNome','msgNome','error','Informe seu nome.'); ok=false; }
@@ -508,13 +551,14 @@
     else if (!isEmail(email)) { setField('rowEmailReg','msgEmailReg','error','E-mail inválido.'); ok=false; }
     if (!senha) { setField('rowSenhaReg','msgSenhaReg','error','Campo obrigatório.'); ok=false; }
     else if (senha.length<6) { setField('rowSenhaReg','msgSenhaReg','error','Mínimo 6 caracteres.'); ok=false; }
+    if (!tipo)  { setField('rowTipo','msgTipo','error','Selecione o tipo de usuário.'); ok=false; }
     if (!ok) return;
 
     const btnReg = document.getElementById('btnRegistrar');
     btnReg.disabled = true;
     try {
       /* Verifica se usuário já existe */
-      const { data: existe } = await db.from('login').select('id').eq('nome', nome).maybeSingle();
+      const { data: existe } = await db.from('login').select('id').ilike('nome', nome).maybeSingle();
       if (existe) {
         setField('rowNome','msgNome','error','Este usuário já está cadastrado.');
         btnReg.disabled = false;
@@ -522,13 +566,13 @@
       }
 
       const senhaHash = await sha256(senha);
-      const { error } = await db.from('login').insert([{ nome, senha: senhaHash }]);
+      const { error } = await db.from('login').insert([{ nome, senha: senhaHash, tipo }]);
       if (error) throw error;
 
       overlay.classList.remove('active');
-      showToast('✓ Conta criada com sucesso!','success');
-      nomeEl.value=''; emailRegEl.value=''; senhaRegEl.value='';
-      [['rowNome','msgNome'],['rowEmailReg','msgEmailReg'],['rowSenhaReg','msgSenhaReg']]
+      showToast(`✓ Conta criada! Perfil: ${tipo}.`, 'success');
+      nomeEl.value=''; emailRegEl.value=''; senhaRegEl.value=''; tipoEl.value='';
+      [['rowNome','msgNome'],['rowEmailReg','msgEmailReg'],['rowSenhaReg','msgSenhaReg'],['rowTipo','msgTipo']]
         .forEach(([r,m])=> setField(r,m,'',''));
     } catch(e) {
       console.error(e);
